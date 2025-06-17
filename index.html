@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Org Chart Full DDC</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="messagingUtil.js"></script>
+  <script src="contentUtil.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; }
+    svg { width: 100vw; height: 100vh; background-color: #e8f5e9; }
+    .node rect {
+      fill: white;
+      stroke: #333;
+      stroke-width: 1.5px;
+      rx: 10;
+      ry: 10;
+    }
+    .node text {
+      font: 12px sans-serif;
+      fill: #000;
+      pointer-events: none;
+    }
+    .link {
+      fill: none;
+      stroke: #888;
+      stroke-width: 1.5px;
+    }
+    #status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 16px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+<div id="status">Waiting for VA data...</div>
+<svg></svg>
+<script>
+const svg = d3.select("svg");
+const g = svg.append("g");
+
+function drawChart(data) {
+  document.getElementById("status").style.display = "none";
+  g.selectAll("*").remove();
+
+  const root = d3.hierarchy(data);
+  const treeLayout = d3.tree().nodeSize([180, 160]);
+  treeLayout(root);
+
+  const linkGen = d3.linkVertical().x(d => d.x).y(d => d.y);
+
+  g.selectAll(".link")
+    .data(root.links())
+    .join("path")
+    .attr("class", "link")
+    .attr("d", linkGen);
+
+  const node = g.selectAll(".node")
+    .data(root.descendants())
+    .join("g")
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+  node.append("rect")
+    .attr("x", -80)
+    .attr("y", -20)
+    .attr("width", 160)
+    .attr("height", 50)
+    .attr("rx", 10).attr("ry", 10);
+
+  node.append("text")
+    .attr("text-anchor", "middle")
+    .selectAll("tspan")
+    .data(d => d.data.label ? d.data.label.split("\n") : [d.data.name])
+    .join("tspan")
+    .attr("x", 0)
+    .attr("dy", (d, i) => `${i * 1.2}em`)
+    .text(d => d);
+}
+
+const testData = {
+  name: "All Products",
+  label: "All Products\nQUANTITY — 0\n2",
+  children: [
+    {
+      name: "IL",
+      label: "IL\nQUANTITY — 35,469,415\n6",
+      children: [
+        { name: "Concentrate", label: "Concentrate\nQUANTITY — 1,269,742\n4" },
+        { name: "Edible", label: "Edible\nQUANTITY — 8,010,476\n13" },
+        { name: "Flower", label: "Flower\nQUANTITY — 7,292,962\n11" },
+        { name: "Pre-Roll", label: "Pre-Roll\nQUANTITY — 9,471,933\n3" },
+        { name: "Topical", label: "Topical\nQUANTITY — 283,782\n26" },
+        { name: "Vape", label: "Vape\nQUANTITY — 9,140,520\n54" }
+      ]
+    },
+    {
+      name: "MN",
+      label: "MN\nQUANTITY — 2,297,899\n6",
+      children: [
+        { name: "Concentrate", label: "Concentrate\nQUANTITY — 7,423\n1" },
+        { name: "Edible", label: "Edible\nQUANTITY — 528,811\n5" },
+        { name: "Flower", label: "Flower\nQUANTITY — 209,878\n2" },
+        { name: "Pre-Roll", label: "Pre-Roll\nQUANTITY — 970,557\n3" },
+        { name: "Topical", label: "Topical\nQUANTITY — 13,792\n1" },
+        { name: "Vape", label: "Vape\nQUANTITY — 567,438\n3" }
+      ]
+    }
+  ]
+};
+
+// Listen for VA data
+window.addEventListener("message", function(event) {
+  if (event.data && event.data.data) {
+    drawChart(event.data.data);
+  }
+});
+
+// Fallback test rendering
+setTimeout(() => {
+  if (!window._va_data_received) {
+    drawChart(testData);
+  }
+}, 1500);
+
+// Enable zoom
+svg.call(d3.zoom().on("zoom", (event) => g.attr("transform", event.transform)));
+</script>
+</body>
+</html>
