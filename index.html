@@ -1,0 +1,132 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Org Chart - SAS VA DDC</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; overflow: hidden; background-color: #eef8f0; }
+    svg { width: 100vw; height: 100vh; }
+    .node rect { fill: #a3d9a5; stroke: #5c915c; stroke-width: 1.5px; rx: 6; ry: 6; }
+    .node text { fill: #1a1a1a; font-size: 14px; }
+    .link { fill: none; stroke: #999; stroke-opacity: 0.6; stroke-width: 1.5px; }
+    .tooltip {
+      position: absolute;
+      padding: 6px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border-radius: 4px;
+      pointer-events: none;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<div id="tooltip" class="tooltip" style="display: none;"></div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+  const tooltip = d3.select("#tooltip");
+  let rootData = {
+    name: "USA",
+    children: [
+      {
+        name: "IL",
+        children: [
+          { name: "Gummy", value: 400 },
+          { name: "Chocolate", value: 200 },
+          { name: "Tablet", value: 300 }
+        ]
+      },
+      {
+        name: "MN",
+        children: [
+          { name: "Gummy", value: 100 },
+          { name: "Chocolate", value: 300 },
+          { name: "Tablet", value: 200 }
+        ]
+      }
+    ]
+  };
+
+  function buildChart(data) {
+    d3.select("svg").remove();
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const svg = d3.select("body").append("svg")
+      .call(d3.zoom().on("zoom", function (event) {
+        g.attr("transform", event.transform)
+      }))
+      .append("g");
+
+    const g = svg.append("g").attr("transform", "translate(50,50)");
+
+    const root = d3.hierarchy(data);
+    const treeLayout = d3.tree().nodeSize([120, 100]);
+    treeLayout(root);
+
+    g.selectAll(".link")
+      .data(root.links())
+      .enter().append("path")
+      .attr("class", "link")
+      .attr("d", d3.linkVertical()
+        .x(d => d.x)
+        .y(d => d.y));
+
+    const node = g.selectAll(".node")
+      .data(root.descendants())
+      .enter().append("g")
+      .attr("class", "node")
+      .attr("transform", d => `translate(${d.x},${d.y})`)
+      .on("mouseover", function (event, d) {
+        tooltip.style("display", "block")
+               .html(`<strong>${d.data.name}</strong><br/>${d.data.value || ''}`)
+               .style("left", (event.pageX + 10) + "px")
+               .style("top", (event.pageY - 20) + "px");
+      })
+      .on("mouseout", () => tooltip.style("display", "none"));
+
+    node.append("rect")
+      .attr("x", -40).attr("y", -12)
+      .attr("width", 80).attr("height", 24);
+
+    node.append("text")
+      .attr("dy", 5)
+      .attr("text-anchor", "middle")
+      .text(d => d.data.name);
+  }
+
+  if (typeof va !== "undefined" && va.contentUtil) {
+    va.messagingUtil.setOnDataReceivedCallback((message) => {
+      const data = message.data;
+      if (!data || !data.rows || !data.columns) return;
+
+      const colIdx = name => data.columns.findIndex(c => c.name.toLowerCase() === name);
+      const stateIdx = colIdx("state"), categoryIdx = colIdx("category"), quantityIdx = colIdx("quantity");
+      const grouped = {};
+
+      data.rows.forEach(row => {
+        const state = row[stateIdx], category = row[categoryIdx], qty = +row[quantityIdx];
+        if (!grouped[state]) grouped[state] = {};
+        grouped[state][category] = (grouped[state][category] || 0) + qty;
+      });
+
+      rootData = {
+        name: "USA",
+        children: Object.entries(grouped).map(([state, categories]) => ({
+          name: state,
+          children: Object.entries(categories).map(([cat, qty]) => ({
+            name: cat,
+            value: qty
+          }))
+        }))
+      };
+      buildChart(rootData);
+    });
+  } else {
+    buildChart(rootData); // fallback for browser testing
+  }
+</script>
+</body>
+</html>
