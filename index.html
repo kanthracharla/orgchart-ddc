@@ -1,0 +1,142 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Org Chart DDC</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/@sassoftware/va-report-components@latest/dist/va-report-components.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f7ef;
+      margin: 0;
+    }
+
+    .node rect {
+      fill: #a2d39c;
+      stroke: #444;
+      stroke-width: 1px;
+      rx: 12;
+      ry: 12;
+    }
+
+    .node text {
+      font-size: 14px;
+      font-weight: bold;
+      text-anchor: middle;
+      fill: #000;
+      pointer-events: none;
+    }
+
+    .link {
+      fill: none;
+      stroke: #999;
+      stroke-opacity: 0.6;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body>
+  <svg width="100%" height="800"></svg>
+  <script>
+    const svg = d3.select("svg");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const g = svg.append("g");
+
+    const treeLayout = d3.tree().nodeSize([200, 150]);
+    const zoom = d3.zoom().on("zoom", (event) => g.attr("transform", event.transform));
+    svg.call(zoom);
+
+    function drawFromFlatData(flatRows) {
+      const root = { name: "All Products", children: [] };
+      const stateMap = {};
+
+      flatRows.forEach(row => {
+        const state = row.state || "Unknown";
+        const category = row.category || "Unknown";
+        const quantity = row.quantity || 0;
+
+        if (!stateMap[state]) {
+          stateMap[state] = { name: `${state}\nQUANTITY — ${quantity.toLocaleString()}`, children: [], quantitySum: 0 };
+          root.children.push(stateMap[state]);
+        }
+
+        stateMap[state].children.push({ name: `${category}\nQUANTITY — ${quantity.toLocaleString()}` });
+        stateMap[state].quantitySum += quantity;
+      });
+
+      root.children.forEach(state => {
+        state.name = `${state.name.split("\n")[0]}\nQUANTITY — ${state.quantitySum.toLocaleString()}`;
+      });
+
+      const hierarchy = d3.hierarchy(root);
+      treeLayout(hierarchy);
+
+      const link = g.selectAll(".link")
+        .data(hierarchy.links())
+        .join("path")
+        .attr("class", "link")
+        .attr("d", d3.linkVertical()
+          .x(d => d.x)
+          .y(d => d.y)
+        );
+
+      const node = g.selectAll(".node")
+        .data(hierarchy.descendants())
+        .join("g")
+        .attr("class", "node")
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+
+      node.append("rect")
+        .attr("x", -80)
+        .attr("y", -25)
+        .attr("width", 160)
+        .attr("height", 50)
+        .attr("rx", 12)
+        .attr("ry", 12);
+
+      node.append("text")
+        .attr("dy", "-0.5em")
+        .text(d => d.data.name.split("\n")[0]);
+
+      node.append("text")
+        .attr("dy", "1em")
+        .text(d => d.data.name.split("\n")[1]);
+    }
+
+    va.ready().then(() => {
+      va.on("data", (data) => {
+        console.log("✅ Received VA data:", data);
+        const columns = va.columns.map(c => c.name);
+        console.log("Columns:", columns);
+
+        const flatRows = data.rows.map(row => {
+          return {
+            state: row[columns.indexOf("state")],
+            category: row[columns.indexOf("category")],
+            quantity: +row[columns.indexOf("quantity")] || 0
+          };
+        });
+
+        console.log("Parsed rows:", flatRows);
+        window._va_data_received = true;
+        drawFromFlatData(flatRows);
+      });
+    });
+
+    // fallback rendering
+    setTimeout(() => {
+      if (typeof window._va_data_received === "undefined") {
+        console.warn("⚠️ No data received from VA. Rendering fallback.");
+        drawFromFlatData([
+          { state: "IL", category: "Flower", quantity: 10000 },
+          { state: "IL", category: "Vape", quantity: 8000 },
+          { state: "MN", category: "Edible", quantity: 5000 }
+        ]);
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
