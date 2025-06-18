@@ -1,0 +1,162 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Org Chart with Flat Data Support</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    svg { width: 100vw; height: 100vh; background: #e8f5e9; }
+    .node rect {
+      fill: white;
+      stroke: #333;
+      stroke-width: 1.5px;
+      rx: 10;
+      ry: 10;
+      cursor: pointer;
+    }
+    .node text {
+      font: 12px sans-serif;
+      fill: #000;
+      pointer-events: none;
+    }
+    .link {
+      fill: none;
+      stroke: #999;
+      stroke-width: 1.5px;
+    }
+    #tooltip {
+      position: absolute;
+      padding: 6px 10px;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.75);
+      color: white;
+      border-radius: 4px;
+      pointer-events: none;
+      display: none;
+    }
+    #status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 16px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+<div id="status">Waiting for VA data...</div>
+<div id="tooltip"></div>
+<svg></svg>
+<script>
+const svg = d3.select("svg");
+const g = svg.append("g");
+const tooltip = d3.select("#tooltip");
+
+function buildTreeFromFlatData(flatRows) {
+  const root = { name: "All Products", children: [] };
+  const stateMap = new Map();
+
+  flatRows.forEach(row => {
+    const state = row.State || "Unknown";
+    const category = row.Category || "Unknown";
+    const qty = +row.Quantity || 0;
+    
+
+    if (!stateMap.has(state)) {
+      stateMap.set(state, { name: state, children: [], totalQty: 0, totalCount: 0 });
+    }
+
+    const stateNode = stateMap.get(state);
+    stateNode.children.push({
+      name: category,
+      label: `${category}\nQUANTITY — ${qty.toLocaleString()}`,
+    });
+    stateNode.totalQty += qty;
+    stateNode.totalCount += count;
+  });
+
+  stateMap.forEach((stateNode) => {
+    root.children.push({
+      name: stateNode.name,
+      label: `${stateNode.name}\nQUANTITY — ${stateNode.totalQty.toLocaleString()}`,
+      children: stateNode.children
+    });
+  });
+
+  return root;
+}
+
+function update(rootData) {
+  const root = d3.hierarchy(rootData);
+  const tree = d3.tree().nodeSize([180, 160]);
+  tree(root);
+
+  g.selectAll("*").remove();
+
+  const links = root.links();
+  const nodes = root.descendants();
+
+  g.selectAll(".link")
+    .data(links)
+    .join("path")
+    .attr("class", "link")
+    .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+
+  const node = g.selectAll(".node")
+    .data(nodes)
+    .join("g")
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.x},${d.y})`)
+    .on("mouseover", (event, d) => {
+      tooltip.style("display", "block")
+             .style("left", event.pageX + 10 + "px")
+             .style("top", event.pageY + "px")
+             .html(d.data.label || d.data.name);
+    })
+    .on("mouseout", () => tooltip.style("display", "none"));
+
+  node.append("rect")
+    .attr("x", -80)
+    .attr("y", -20)
+    .attr("width", 160)
+    .attr("height", 50);
+
+  node.append("text")
+    .attr("text-anchor", "middle")
+    .selectAll("tspan")
+    .data(d => (d.data.label || d.data.name).split("\n"))
+    .join("tspan")
+    .attr("x", 0)
+    .attr("dy", (d, i) => `${i * 1.2}em`)
+    .text(d => d);
+}
+
+function drawFromFlatData(data) {
+  const tree = buildTreeFromFlatData(data);
+  document.getElementById("status").style.display = "none";
+  update(tree);
+}
+
+window.addEventListener("message", function(event) {
+  if (event.data && event.data.data && Array.isArray(event.data.data)) {
+    drawFromFlatData(event.data.data);
+    window._va_data_received = true;
+  }
+});
+
+setTimeout(() => {
+  if (!window._va_data_received) {
+    drawFromFlatData([
+      { State: "IL", Category: "Flower", Quantity: 10000 },
+      { State: "IL", Category: "Vape", Quantity: 8000 },
+      { State: "MN", Category: "Edible", Quantity: 5000 }
+    ]);
+  }
+}, 1500);
+
+svg.call(d3.zoom().on("zoom", (event) => g.attr("transform", event.transform)));
+</script>
+</body>
+</html>
