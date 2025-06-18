@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Org Chart DDC</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f4faf3;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .node rect {
+      fill: #a4d68e;
+      stroke: #333;
+      stroke-width: 1.5px;
+      rx: 12;
+      ry: 12;
+    }
+
+    .node text {
+      fill: #000;
+      font-size: 14px;
+    }
+
+    .link {
+      fill: none;
+      stroke: #aaa;
+      stroke-width: 2px;
+    }
+
+    .tooltip {
+      position: absolute;
+      padding: 6px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: 12px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <svg width="100%" height="100%"></svg>
+
+  <script>
+    const svg = d3.select("svg");
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const g = svg.append("g").attr("transform", "translate(40,40)");
+
+    const zoom = d3.zoom().on("zoom", (event) => {
+      g.attr("transform", event.transform);
+    });
+    svg.call(zoom);
+
+    function drawOrgChart(data) {
+      g.selectAll("*").remove();
+
+      const root = d3.hierarchy(data);
+      const tree = d3.tree().nodeSize([120, 180]);
+      tree(root);
+
+      const link = g.selectAll(".link")
+        .data(root.links())
+        .enter()
+        .append("path")
+        .attr("class", "link")
+        .attr("d", d3.linkVertical()
+          .x(d => d.x)
+          .y(d => d.y));
+
+      const node = g.selectAll(".node")
+        .data(root.descendants())
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+
+      node.append("rect")
+        .attr("x", -70)
+        .attr("y", -25)
+        .attr("width", 140)
+        .attr("height", 50)
+        .attr("rx", 12)
+        .attr("ry", 12);
+
+      node.append("text")
+        .attr("text-anchor", "middle")
+        .attr("y", -5)
+        .text(d => d.data.name);
+
+      node.append("text")
+        .attr("text-anchor", "middle")
+        .attr("y", 15)
+        .text(d => `QUANTITY — ${(+d.data.quantity).toLocaleString()}`);
+    }
+
+    function transformFlatData(rows) {
+      const stateMap = {};
+      const root = { name: "All Products", quantity: 0, children: [] };
+
+      rows.forEach(row => {
+        const state = row.state || "Unknown";
+        const category = row.category || "Unknown";
+        const quantity = +row.quantity || 0;
+
+        if (!stateMap[state]) {
+          const stateNode = { name: state, quantity: 0, children: [] };
+          root.children.push(stateNode);
+          stateMap[state] = stateNode;
+        }
+
+        stateMap[state].children.push({ name: category, quantity });
+        stateMap[state].quantity += quantity;
+        root.quantity += quantity;
+      });
+
+      return root;
+    }
+
+    function drawFromFlatData(sampleData) {
+      const root = transformFlatData(sampleData);
+      drawOrgChart(root);
+    }
+
+    function showFallback() {
+      const sample = [
+        { state: "IL", category: "Flower", quantity: 10000 },
+        { state: "IL", category: "Vape", quantity: 8000 },
+        { state: "MN", category: "Edible", quantity: 5000 }
+      ];
+      drawFromFlatData(sample);
+    }
+
+    // DDC VA listener
+    window.addEventListener("message", function(event) {
+      if (event.data && event.data.va) {
+        const rows = event.data.va.resultData;
+        console.log("Received data from SAS VA:", rows);
+        drawFromFlatData(rows);
+        if (window.va && window.va.messagingUtil) {
+          window.va.messagingUtil.postInstruction("setFilterable", true);
+        }
+      } else {
+        console.warn("Data-driven content: VA data not found. Rendering fallback.");
+        showFallback();
+      }
+    });
+
+    // Initial fallback if not connected to VA
+    setTimeout(() => {
+      if (!window._va_data_received) {
+        showFallback();
+      }
+    }, 500);
+  </script>
+</body>
+</html>
