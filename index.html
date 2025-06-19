@@ -125,7 +125,9 @@
     }
 
     function initDDC() {
-      console.log("[INIT] Initializing...");
+      console.log("DOMContentLoaded - initDDC called");
+      console.log("window.va is", typeof window.va !== "undefined" ? "available" : "NOT available");
+
       if (window.va && va.contentUtil && va.messagingUtil) {
         console.log("[INIT] VA object found, setting up page...");
         va.contentUtil.setupPage();
