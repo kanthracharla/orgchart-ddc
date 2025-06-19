@@ -1,0 +1,158 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Org Chart DDC</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f4fbf3;
+    }
+    .node rect {
+      fill: #90ee90;
+      stroke: #333;
+      stroke-width: 1.5px;
+      rx: 10;
+      ry: 10;
+    }
+    .node text {
+      font: 14px sans-serif;
+      fill: black;
+      text-anchor: middle;
+    }
+    .link {
+      fill: none;
+      stroke: #ccc;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body>
+  <svg width="100%" height="100%"></svg>
+
+  <script type="text/javascript">
+    console.log("✅ Script loaded");
+
+    const svg = d3.select("svg"),
+          width = window.innerWidth,
+          height = window.innerHeight,
+          g = svg.append("g");
+
+    svg.call(d3.zoom().on("zoom", (event) => {
+      g.attr("transform", event.transform);
+    }));
+
+    function drawChart(rootData) {
+      console.log("✅ Drawing chart with data:", rootData);
+      g.selectAll("*").remove();
+      const root = d3.hierarchy(rootData);
+      const treeLayout = d3.tree().size([width - 100, height - 100]);
+      treeLayout(root);
+
+      g.selectAll(".link")
+        .data(root.links())
+        .enter().append("path")
+        .attr("class", "link")
+        .attr("d", d3.linkVertical()
+          .x(d => d.x)
+          .y(d => d.y));
+
+      const node = g.selectAll(".node")
+        .data(root.descendants())
+        .enter().append("g")
+        .attr("class", "node")
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+
+      node.append("rect")
+        .attr("x", -60).attr("y", -20)
+        .attr("width", 120).attr("height", 40);
+
+      node.append("text")
+        .attr("dy", "-0.3em")
+        .text(d => d.data.name);
+
+      node.append("text")
+        .attr("dy", "1.1em")
+        .text(d => d.data.value ? `QUANTITY — ${d3.format(",")(d.data.value)}` : "");
+    }
+
+    function transformData(data) {
+      console.log("✅ Transforming raw VA data:", data);
+      const stateMap = {};
+      data.forEach(row => {
+        const { state, category, quantity } = row;
+        if (!stateMap[state]) {
+          stateMap[state] = { name: state, children: [], value: 0 };
+        }
+        stateMap[state].children.push({ name: category, value: +quantity });
+        stateMap[state].value += +quantity;
+      });
+      return {
+        name: "All Products",
+        children: Object.values(stateMap)
+      };
+    }
+
+    function fallbackChart() {
+      console.warn("⚠️ No VA data, displaying fallback");
+      drawChart({
+        name: "All Products",
+        children: [
+          {
+            name: "MN",
+            value: 5000,
+            children: [{ name: "Edible", value: 5000 }]
+          },
+          {
+            name: "IL",
+            value: 18000,
+            children: [
+              { name: "Flower", value: 10000 },
+              { name: "Vape", value: 8000 }
+            ]
+          }
+        ]
+      });
+    }
+
+    function initDDC() {
+      console.log("✅ initDDC triggered");
+      try {
+        if (window.va && va.contentUtil && va.messagingUtil) {
+          console.log("✅ VA hooks found, initializing...");
+          va.contentUtil.setupPage();
+          va.messagingUtil.setOnDataReceivedCallback((data) => {
+            console.log("✅ Data received from VA:", data);
+            const rows = data.resultData;
+            if (!rows || rows.length === 0) {
+              console.warn("⚠️ Empty data received");
+              fallbackChart();
+              return;
+            }
+            const clean = rows.map(r => ({
+              state: r[0]?.rawValue || "Unknown",
+              category: r[1]?.rawValue || "Unknown",
+              quantity: r[2]?.rawValue || 0
+            }));
+            const rootData = transformData(clean);
+            drawChart(rootData);
+          });
+          va.messagingUtil.postInitializationMessage();
+        } else {
+          console.warn("⚠️ VA hooks missing. Displaying fallback.");
+          fallbackChart();
+        }
+      } catch (e) {
+        console.error("❌ Error during initDDC:", e);
+        fallbackChart();
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", initDDC);
+  </script>
+</body>
+</html>
