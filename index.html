@@ -1,11 +1,17 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Org Chart DDC</title>
+
+  <!-- Required DDC utility libraries -->
+  <script type="text/javascript" src="contentUtil.js"></script>
+  <script type="text/javascript" src="messagingUtil.js"></script>
+
+  <!-- D3 Library -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
+
   <style>
     body {
       margin: 0;
@@ -45,6 +51,7 @@
     }));
 
     function drawChart(rootData) {
+      console.log("[DRAW] Rendering chart...");
       g.selectAll("*").remove();
       const root = d3.hierarchy(rootData);
       const treeLayout = d3.tree().size([width - 100, height - 100]);
@@ -87,14 +94,16 @@
         stateMap[state].children.push({ name: category, value: +quantity });
         stateMap[state].value += +quantity;
       });
-      return {
+      const result = {
         name: "All Products",
         children: Object.values(stateMap)
       };
+      console.log("[TRANSFORM] Data prepared:", result);
+      return result;
     }
 
     function fallbackChart() {
-      console.warn("🔁 Rendering fallback chart.");
+      console.log("[FALLBACK] Rendering fallback chart.");
       drawChart({
         name: "All Products",
         children: [
@@ -116,45 +125,36 @@
     }
 
     function initDDC() {
-      console.log("🟡 DDC Initialization started...");
-
+      console.log("[INIT] Initializing...");
       if (window.va && va.contentUtil && va.messagingUtil) {
-        console.log("✅ VA object and messaging utilities are available.");
-
+        console.log("[INIT] VA object found, setting up page...");
         va.contentUtil.setupPage();
 
         va.messagingUtil.setOnDataReceivedCallback((data) => {
-          console.log("📦 Data received from VA messagingUtil:", data);
-
+          console.log("[DATA RECEIVED]", data);
           try {
             const rows = data.resultData;
             if (!rows || rows.length === 0) {
-              console.warn("⚠️ No rows received. Using fallback.");
+              console.warn("[WARN] No data received.");
               fallbackChart();
               return;
             }
-
             const clean = rows.map(r => ({
               state: r[0]?.rawValue || "Unknown",
               category: r[1]?.rawValue || "Unknown",
               quantity: r[2]?.rawValue || 0
             }));
-
-            console.log("🔍 Transformed clean data:", clean);
             const rootData = transformData(clean);
             drawChart(rootData);
-
           } catch (err) {
-            console.error("❌ Error rendering chart:", err);
+            console.error("[ERROR] Failed to process data:", err);
             fallbackChart();
           }
         });
 
         va.messagingUtil.postInitializationMessage();
-        console.log("📤 Initialization message posted to VA.");
-
       } else {
-        console.error("❌ VA object or utilities not available. Falling back.");
+        console.warn("[WARN] VA object not available. Showing fallback.");
         fallbackChart();
       }
     }
