@@ -143,11 +143,23 @@
               fallbackChart();
               return;
             }
-            const clean = rows.map(r => ({
-              state: r[0]?.rawValue || r[0]?.formattedValue || "Unknown",
-              category: r[1]?.rawValue || r[1]?.formattedValue || "Unknown",
-              quantity: parseFloat(r[2]?.rawValue || r[2]?.formattedValue || 0)
-            }));
+            const colNames = data.columns.map(c => c.name.toLowerCase());
+const idxState = colNames.indexOf("state");
+const idxCategory = colNames.indexOf("category");
+const idxQuantity = colNames.indexOf("quantity");
+
+if (idxState === -1 || idxCategory === -1 || idxQuantity === -1) {
+  console.warn("[WARN] One or more expected columns (state, category, quantity) not found.");
+  fallbackChart();
+  return;
+}
+
+const clean = rows.map(r => ({
+  state: r[idxState]?.rawValue || r[idxState]?.formattedValue || "Unknown",
+  category: r[idxCategory]?.rawValue || r[idxCategory]?.formattedValue || "Unknown",
+  quantity: parseFloat(r[idxQuantity]?.rawValue || r[idxQuantity]?.formattedValue || 0)
+}));
+
             const rootData = transformData(clean);
             drawChart(rootData);
           } catch (err) {
