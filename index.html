@@ -127,14 +127,15 @@
     function initDDC() {
       console.log("[INIT] DOMContentLoaded - initDDC called");
       console.log("[INIT] Checking VA object...");
-      console.log("[CHECK] window.va:", window.va);
-
       if (window.va && va.contentUtil && va.messagingUtil) {
         console.log("[INIT] VA object found, setting up page...");
         va.contentUtil.setupPage();
 
         va.messagingUtil.setOnDataReceivedCallback((data) => {
           console.log("[DATA RECEIVED]", data);
+          console.log("[DEBUG] Columns:", data.columns);
+          console.log("[DEBUG] Result Data:", data.resultData);
+
           try {
             const rows = data.resultData;
             if (!rows || rows.length === 0) {
