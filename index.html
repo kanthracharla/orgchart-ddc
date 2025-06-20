@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Org Chart DDC</title>
 
-  <!-- Required DDC utility libraries -->
+  <!-- DDC utility libraries -->
   <script type="text/javascript" src="https://kanthracharla.github.io/orgchart-ddc/contentUtil.js"></script>
   <script type="text/javascript" src="https://kanthracharla.github.io/orgchart-ddc/messagingUtil.js"></script>
 
@@ -38,147 +38,136 @@
   </style>
 </head>
 <body>
-  <svg width="100%" height="100%"></svg>
+<svg width="100%" height="100%"></svg>
 
-  <script>
-    const svg = d3.select("svg"),
-          width = window.innerWidth,
-          height = window.innerHeight,
-          g = svg.append("g");
+<script>
+  const svg = d3.select("svg"),
+        width = window.innerWidth,
+        height = window.innerHeight,
+        g = svg.append("g");
 
-    svg.call(d3.zoom().on("zoom", (event) => {
-      g.attr("transform", event.transform);
-    }));
+  svg.call(d3.zoom().on("zoom", (event) => {
+    g.attr("transform", event.transform);
+  }));
 
-    function drawChart(rootData) {
-      console.log("[DRAW] Rendering chart...");
-      g.selectAll("*").remove();
-      const root = d3.hierarchy(rootData);
-      const treeLayout = d3.tree().size([width - 100, height - 100]);
-      treeLayout(root);
+  function drawChart(rootData) {
+    console.log("[DRAW] Rendering chart...");
+    g.selectAll("*").remove();
+    const root = d3.hierarchy(rootData);
+    const treeLayout = d3.tree().size([width - 100, height - 100]);
+    treeLayout(root);
 
-      g.selectAll(".link")
-        .data(root.links())
-        .enter().append("path")
-        .attr("class", "link")
-        .attr("d", d3.linkVertical()
-          .x(d => d.x)
-          .y(d => d.y));
+    g.selectAll(".link")
+      .data(root.links())
+      .enter().append("path")
+      .attr("class", "link")
+      .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
 
-      const node = g.selectAll(".node")
-        .data(root.descendants())
-        .enter().append("g")
-        .attr("class", "node")
-        .attr("transform", d => `translate(${d.x},${d.y})`);
+    const node = g.selectAll(".node")
+      .data(root.descendants())
+      .enter().append("g")
+      .attr("class", "node")
+      .attr("transform", d => `translate(${d.x},${d.y})`);
 
-      node.append("rect")
-        .attr("x", -60).attr("y", -20)
-        .attr("width", 120).attr("height", 40);
+    node.append("rect")
+      .attr("x", -60).attr("y", -20)
+      .attr("width", 120).attr("height", 40);
 
-      node.append("text")
-        .attr("dy", "-0.3em")
-        .text(d => d.data.name);
+    node.append("text")
+      .attr("dy", "-0.3em")
+      .text(d => d.data.name);
 
-      node.append("text")
-        .attr("dy", "1.1em")
-        .text(d => d.data.value ? `QUANTITY — ${d3.format(",")(d.data.value)}` : "");
-    }
+    node.append("text")
+      .attr("dy", "1.1em")
+      .text(d => d.data.value ? `QUANTITY — ${d3.format(",")(d.data.value)}` : "");
+  }
 
-    function transformData(data) {
-      const stateMap = {};
-      data.forEach(row => {
-        const { state, category, quantity } = row;
-        if (!stateMap[state]) {
-          stateMap[state] = { name: state, children: [], value: 0 };
-        }
-        stateMap[state].children.push({ name: category, value: +quantity });
-        stateMap[state].value += +quantity;
-      });
-      const result = {
-        name: "All Products",
-        children: Object.values(stateMap)
-      };
-      console.log("[TRANSFORM] Data prepared:", result);
-      return result;
-    }
-
-    function fallbackChart() {
-      console.log("[FALLBACK] Rendering fallback chart.");
-      drawChart({
-        name: "All Products",
-        children: [
-          {
-            name: "MN",
-            value: 5000,
-            children: [{ name: "Edible", value: 5000 }]
-          },
-          {
-            name: "IL",
-            value: 18000,
-            children: [
-              { name: "Flower", value: 10000 },
-              { name: "Vape", value: 8000 }
-            ]
-          }
-        ]
-      });
-    }
-
-    function initDDC() {
-      console.log("[INIT] DOMContentLoaded - initDDC called");
-      console.log("[INIT] Checking VA object...");
-      if (window.va && va.contentUtil && va.messagingUtil) {
-        console.log("[INIT] VA object found, setting up page...");
-        va.contentUtil.setupPage();
-
-        va.messagingUtil.setOnDataReceivedCallback((data) => {
-          console.log("[DATA RECEIVED]", data);
-          console.log("[DEBUG] Columns:", data.columns);
-          console.log("[DEBUG] Result Data:", data.resultData);
-
-          try {
-            const colNames = data.columns.map(c => c.name.toLowerCase());
-            const idxState = colNames.indexOf("state");
-            const idxCategory = colNames.indexOf("category");
-            const idxQuantity = colNames.indexOf("quantity");
-
-            if (idxState === -1 || idxCategory === -1 || idxQuantity === -1) {
-              console.warn("[WARN] One or more expected columns (state, category, quantity) not found.");
-              fallbackChart();
-              return;
-            }
-
-            const rows = data.resultData;
-            const clean = rows.map(r => ({
-              state: r[idxState]?.rawValue || r[idxState]?.formattedValue || "Unknown",
-              category: r[idxCategory]?.rawValue || r[idxCategory]?.formattedValue || "Unknown",
-              quantity: parseFloat(r[idxQuantity]?.rawValue || r[idxQuantity]?.formattedValue || 0)
-            }));
-
-            console.log("[DEBUG] Cleaned Data:", clean);
-
-            if (!clean.length) {
-              console.warn("[WARN] Clean array is empty. Falling back.");
-              fallbackChart();
-              return;
-            }
-
-            const rootData = transformData(clean);
-            drawChart(rootData);
-          } catch (err) {
-            console.error("[ERROR] Failed to process data:", err);
-            fallbackChart();
-          }
-        });
-
-        va.messagingUtil.postInitializationMessage();
-      } else {
-        console.warn("[WARN] VA object not available. Showing fallback.");
-        fallbackChart();
+  function transformData(data) {
+    const stateMap = {};
+    data.forEach(row => {
+      const { state, category, quantity } = row;
+      if (!stateMap[state]) {
+        stateMap[state] = { name: state, children: [], value: 0 };
       }
-    }
+      stateMap[state].children.push({ name: category, value: +quantity });
+      stateMap[state].value += +quantity;
+    });
+    const result = {
+      name: "All Products",
+      children: Object.values(stateMap)
+    };
+    console.log("[TRANSFORM] Data prepared:", result);
+    return result;
+  }
 
-    window.addEventListener("DOMContentLoaded", initDDC);
-  </script>
+  function fallbackChart() {
+    console.log("[FALLBACK] Rendering fallback chart.");
+    drawChart({
+      name: "All Products",
+      children: [
+        { name: "MN", value: 5000, children: [{ name: "Edible", value: 5000 }] },
+        { name: "IL", value: 18000, children: [
+          { name: "Flower", value: 10000 },
+          { name: "Vape", value: 8000 }
+        ]}
+      ]
+    });
+  }
+
+  function initDDC() {
+    console.log("[INIT] DOMContentLoaded - initDDC called");
+    if (window.va && va.contentUtil && va.messagingUtil) {
+      console.log("[INIT] VA object found, setting up page...");
+      va.contentUtil.setupPage();
+
+      va.messagingUtil.setOnDataReceivedCallback((data) => {
+        console.log("[DATA RECEIVED]", data);
+        console.log("[DEBUG] Columns:", data.columns);
+        console.log("[DEBUG] Result Data:", data.resultData);
+
+        try {
+          const rows = data.resultData;
+          if (!rows || rows.length === 0) {
+            console.warn("[WARN] No data received.");
+            fallbackChart();
+            return;
+          }
+
+          const colNames = data.columns.map(c => c.name.toLowerCase());
+          const idxState = colNames.indexOf("state");
+          const idxCategory = colNames.indexOf("category");
+          const idxQuantity = colNames.indexOf("quantity");
+
+          if (idxState === -1 || idxCategory === -1 || idxQuantity === -1) {
+            console.warn("[WARN] Required columns not found. Showing fallback.");
+            fallbackChart();
+            return;
+          }
+
+          const clean = rows.map(r => ({
+            state: r[idxState]?.rawValue || r[idxState]?.formattedValue || "Unknown",
+            category: r[idxCategory]?.rawValue || r[idxCategory]?.formattedValue || "Unknown",
+            quantity: parseFloat(r[idxQuantity]?.rawValue || r[idxQuantity]?.formattedValue || 0)
+          }));
+
+          console.log("[CLEANED DATA]", clean);
+          const rootData = transformData(clean);
+          console.log("[ROOT DATA]", rootData);
+          drawChart(rootData);
+        } catch (err) {
+          console.error("[ERROR] Failed to process data:", err);
+          fallbackChart();
+        }
+      });
+
+      va.messagingUtil.postInitializationMessage();
+    } else {
+      console.warn("[WARN] VA object not available. Showing fallback.");
+      fallbackChart();
+    }
+  }
+
+  window.addEventListener("DOMContentLoaded", initDDC);
+</script>
 </body>
 </html>
