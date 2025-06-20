@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Org Chart DDC</title>
 
-  <!-- Required DDC utility libraries -->
+  <!-- DDC utility libraries -->
   <script type="text/javascript" src="contentUtil.js"></script>
   <script type="text/javascript" src="messagingUtil.js"></script>
 
@@ -126,7 +126,6 @@
 
     function initDDC() {
       console.log("[INIT] DOMContentLoaded - initDDC called");
-      console.log("[INIT] Checking VA object...");
       if (window.va && va.contentUtil && va.messagingUtil) {
         console.log("[INIT] VA object found, setting up page...");
         va.contentUtil.setupPage();
@@ -137,17 +136,19 @@
           console.log("[DEBUG] Result Data:", data.resultData);
 
           try {
-            const rows = data.resultData;
-            if (!rows || rows.length === 0) {
-              console.warn("[WARN] No data received.");
-              fallbackChart();
-              return;
-            }
-            const clean = rows.map(r => ({
-              state: r[0]?.rawValue || "Unknown",
-              category: r[1]?.rawValue || "Unknown",
-              quantity: r[2]?.rawValue || 0
+            const colIndex = {
+              state: data.columns.findIndex(c => c.name.toLowerCase().includes("state")),
+              category: data.columns.findIndex(c => c.name.toLowerCase().includes("category")),
+              quantity: data.columns.findIndex(c => c.name.toLowerCase().includes("quant"))
+            };
+            console.log("[DEBUG] Column Index Map:", colIndex);
+
+            const clean = data.resultData.map(r => ({
+              state: r[colIndex.state]?.rawValue || "Unknown",
+              category: r[colIndex.category]?.rawValue || "Unknown",
+              quantity: r[colIndex.quantity]?.rawValue || 0
             }));
+
             const rootData = transformData(clean);
             drawChart(rootData);
           } catch (err) {
