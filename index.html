@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,7 +59,9 @@
         .data(root.links())
         .enter().append("path")
         .attr("class", "link")
-        .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+        .attr("d", d3.linkVertical()
+          .x(d => d.x)
+          .y(d => d.y));
 
       const node = g.selectAll(".node")
         .data(root.descendants())
@@ -102,9 +105,14 @@
       drawChart({
         name: "All Products",
         children: [
-          { name: "MN", value: 5000, children: [{ name: "Edible", value: 5000 }] },
           {
-            name: "IL", value: 18000,
+            name: "MN",
+            value: 5000,
+            children: [{ name: "Edible", value: 5000 }]
+          },
+          {
+            name: "IL",
+            value: 18000,
             children: [
               { name: "Flower", value: 10000 },
               { name: "Vape", value: 8000 }
@@ -117,32 +125,31 @@
     function initDDC() {
       console.log("[INIT] DOMContentLoaded - initDDC called");
       if (window.va && va.contentUtil && va.messagingUtil) {
-        console.log("[INIT] VA object found, setting up...");
+        console.log("[INIT] VA object found, setting up page...");
         va.contentUtil.setupPage();
 
         va.messagingUtil.setOnDataReceivedCallback((data) => {
           console.log("[DATA RECEIVED]", data);
           try {
-            const cols = data.columns.map(col => col.name.toLowerCase());
-            const idx = {
-              state: cols.indexOf("state"),
-              category: cols.indexOf("category"),
-              quantity: cols.indexOf("quantity")
-            };
-            if (idx.state === -1 || idx.category === -1 || idx.quantity === -1) {
-              console.warn("[WARN] Missing required fields.");
+            const rows = data.resultData;
+            const columns = data.columns;
+
+            const stateIdx = columns.findIndex(col => col.name.toLowerCase().includes("state"));
+            const categoryIdx = columns.findIndex(col => col.name.toLowerCase().includes("category"));
+            const quantityIdx = columns.findIndex(col => col.name.toLowerCase().includes("quantity"));
+
+            if (rows && rows.length > 0 && stateIdx !== -1 && categoryIdx !== -1 && quantityIdx !== -1) {
+              const clean = rows.map(r => ({
+                state: r[stateIdx]?.rawValue || "Unknown",
+                category: r[categoryIdx]?.rawValue || "Unknown",
+                quantity: r[quantityIdx]?.rawValue || 0
+              }));
+              const rootData = transformData(clean);
+              drawChart(rootData);
+            } else {
+              console.warn("[WARN] No data or missing required columns.");
               fallbackChart();
-              return;
             }
-
-            const clean = data.resultData.map(row => ({
-              state: row[idx.state]?.rawValue || "Unknown",
-              category: row[idx.category]?.rawValue || "Unknown",
-              quantity: row[idx.quantity]?.rawValue || 0
-            }));
-
-            const rootData = transformData(clean);
-            drawChart(rootData);
           } catch (err) {
             console.error("[ERROR] Failed to process data:", err);
             fallbackChart();
