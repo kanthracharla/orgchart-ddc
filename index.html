@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Org Chart DDC</title>
 
-  <!-- DDC utility libraries -->
+  <!-- Required DDC utility libraries -->
   <script type="text/javascript" src="contentUtil.js"></script>
   <script type="text/javascript" src="messagingUtil.js"></script>
 
@@ -61,9 +61,7 @@
         .data(root.links())
         .enter().append("path")
         .attr("class", "link")
-        .attr("d", d3.linkVertical()
-          .x(d => d.x)
-          .y(d => d.y));
+        .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
 
       const node = g.selectAll(".node")
         .data(root.descendants())
@@ -87,18 +85,21 @@
     function transformData(data) {
       const stateMap = {};
       data.forEach(row => {
-        const { state, category, quantity } = row;
+        const state = row.find(col => col.column === "state")?.rawValue || "Unknown";
+        const category = row.find(col => col.column === "category")?.rawValue || "Unknown";
+        const quantity = parseFloat(row.find(col => col.column === "quantity")?.rawValue) || 0;
+
         if (!stateMap[state]) {
           stateMap[state] = { name: state, children: [], value: 0 };
         }
-        stateMap[state].children.push({ name: category, value: +quantity });
-        stateMap[state].value += +quantity;
+        stateMap[state].children.push({ name: category, value: quantity });
+        stateMap[state].value += quantity;
       });
       const result = {
         name: "All Products",
         children: Object.values(stateMap)
       };
-      console.log("[TRANSFORM] Data prepared:", result);
+      console.log("[TRANSFORM] Final structured data:", result);
       return result;
     }
 
@@ -107,19 +108,11 @@
       drawChart({
         name: "All Products",
         children: [
-          {
-            name: "MN",
-            value: 5000,
-            children: [{ name: "Edible", value: 5000 }]
-          },
-          {
-            name: "IL",
-            value: 18000,
-            children: [
+          { name: "MN", value: 5000, children: [{ name: "Edible", value: 5000 }] },
+          { name: "IL", value: 18000, children: [
               { name: "Flower", value: 10000 },
               { name: "Vape", value: 8000 }
-            ]
-          }
+            ] }
         ]
       });
     }
@@ -127,27 +120,25 @@
     function initDDC() {
       console.log("[INIT] DOMContentLoaded - initDDC called");
       if (window.va && va.contentUtil && va.messagingUtil) {
-        console.log("[INIT] VA object found, setting up page...");
+        console.log("[INIT] VA object found.");
         va.contentUtil.setupPage();
 
         va.messagingUtil.setOnDataReceivedCallback((data) => {
           console.log("[DATA RECEIVED]", data);
-          console.log("[DEBUG] Columns:", data.columns);
-          console.log("[DEBUG] Result Data:", data.resultData);
-
           try {
-            const colIndex = {
-              state: data.columns.findIndex(c => c.name.toLowerCase().includes("state")),
-              category: data.columns.findIndex(c => c.name.toLowerCase().includes("category")),
-              quantity: data.columns.findIndex(c => c.name.toLowerCase().includes("quant"))
-            };
-            console.log("[DEBUG] Column Index Map:", colIndex);
+            const rows = data.resultData;
+            if (!rows || rows.length === 0) {
+              console.warn("[WARN] No data received.");
+              fallbackChart();
+              return;
+            }
 
-            const clean = data.resultData.map(r => ({
-              state: r[colIndex.state]?.rawValue || "Unknown",
-              category: r[colIndex.category]?.rawValue || "Unknown",
-              quantity: r[colIndex.quantity]?.rawValue || 0
-            }));
+            // Add column names to each cell
+            const cols = data.columns.map(col => col.name);
+            const clean = rows.map(row => row.map((cell, i) => ({
+              ...cell,
+              column: cols[i]
+            })));
 
             const rootData = transformData(clean);
             drawChart(rootData);
@@ -159,7 +150,7 @@
 
         va.messagingUtil.postInitializationMessage();
       } else {
-        console.warn("[WARN] VA object not available. Showing fallback.");
+        console.warn("[WARN] VA object not found. Fallback mode.");
         fallbackChart();
       }
     }
