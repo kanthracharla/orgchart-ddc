@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Org Chart DDC</title>
 
+  <!-- Required DDC utility libraries -->
   <script type="text/javascript" src="https://kanthracharla.github.io/orgchart-ddc/contentUtil.js"></script>
   <script type="text/javascript" src="https://kanthracharla.github.io/orgchart-ddc/messagingUtil.js"></script>
+
+  <!-- D3 Library -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
   <style>
@@ -124,32 +126,30 @@
 
     function initDDC() {
       console.log("[INIT] DOMContentLoaded - initDDC called");
+      console.log("[INIT] Checking VA object...");
       if (window.va && va.contentUtil && va.messagingUtil) {
         console.log("[INIT] VA object found, setting up page...");
         va.contentUtil.setupPage();
 
         va.messagingUtil.setOnDataReceivedCallback((data) => {
           console.log("[DATA RECEIVED]", data);
+          console.log("[DEBUG] Columns:", data.columns);
+          console.log("[DEBUG] Result Data:", data.resultData);
+
           try {
             const rows = data.resultData;
-            const columns = data.columns;
-
-            const stateIdx = columns.findIndex(col => col.name.toLowerCase().includes("state"));
-            const categoryIdx = columns.findIndex(col => col.name.toLowerCase().includes("category"));
-            const quantityIdx = columns.findIndex(col => col.name.toLowerCase().includes("quantity"));
-
-            if (rows && rows.length > 0 && stateIdx !== -1 && categoryIdx !== -1 && quantityIdx !== -1) {
-              const clean = rows.map(r => ({
-                state: r[stateIdx]?.rawValue || "Unknown",
-                category: r[categoryIdx]?.rawValue || "Unknown",
-                quantity: r[quantityIdx]?.rawValue || 0
-              }));
-              const rootData = transformData(clean);
-              drawChart(rootData);
-            } else {
-              console.warn("[WARN] No data or missing required columns.");
+            if (!rows || rows.length === 0) {
+              console.warn("[WARN] No data received.");
               fallbackChart();
+              return;
             }
+            const clean = rows.map(r => ({
+              state: r[0]?.rawValue || r[0]?.formattedValue || "Unknown",
+              category: r[1]?.rawValue || r[1]?.formattedValue || "Unknown",
+              quantity: parseFloat(r[2]?.rawValue || r[2]?.formattedValue || 0)
+            }));
+            const rootData = transformData(clean);
+            drawChart(rootData);
           } catch (err) {
             console.error("[ERROR] Failed to process data:", err);
             fallbackChart();
