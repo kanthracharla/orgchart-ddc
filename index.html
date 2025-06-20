@@ -58,9 +58,7 @@
         .data(root.links())
         .enter().append("path")
         .attr("class", "link")
-        .attr("d", d3.linkVertical()
-          .x(d => d.x)
-          .y(d => d.y));
+        .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
 
       const node = g.selectAll(".node")
         .data(root.descendants())
@@ -91,10 +89,12 @@
         stateMap[state].children.push({ name: category, value: +quantity });
         stateMap[state].value += +quantity;
       });
-      return {
+      const result = {
         name: "All Products",
         children: Object.values(stateMap)
       };
+      console.log("[TRANSFORM] Data prepared:", result);
+      return result;
     }
 
     function fallbackChart() {
@@ -103,10 +103,13 @@
         name: "All Products",
         children: [
           { name: "MN", value: 5000, children: [{ name: "Edible", value: 5000 }] },
-          { name: "IL", value: 18000, children: [
-            { name: "Flower", value: 10000 },
-            { name: "Vape", value: 8000 }
-          ]}
+          {
+            name: "IL", value: 18000,
+            children: [
+              { name: "Flower", value: 10000 },
+              { name: "Vape", value: 8000 }
+            ]
+          }
         ]
       });
     }
@@ -114,37 +117,36 @@
     function initDDC() {
       console.log("[INIT] DOMContentLoaded - initDDC called");
       if (window.va && va.contentUtil && va.messagingUtil) {
-        console.log("[INIT] VA object found.");
+        console.log("[INIT] VA object found, setting up...");
         va.contentUtil.setupPage();
 
         va.messagingUtil.setOnDataReceivedCallback((data) => {
           console.log("[DATA RECEIVED]", data);
+          try {
+            const cols = data.columns.map(col => col.name.toLowerCase());
+            const idx = {
+              state: cols.indexOf("state"),
+              category: cols.indexOf("category"),
+              quantity: cols.indexOf("quantity")
+            };
+            if (idx.state === -1 || idx.category === -1 || idx.quantity === -1) {
+              console.warn("[WARN] Missing required fields.");
+              fallbackChart();
+              return;
+            }
 
-          if (!data || !data.resultData || !data.columns) {
-            console.warn("[WARN] No usable data. Falling back.");
+            const clean = data.resultData.map(row => ({
+              state: row[idx.state]?.rawValue || "Unknown",
+              category: row[idx.category]?.rawValue || "Unknown",
+              quantity: row[idx.quantity]?.rawValue || 0
+            }));
+
+            const rootData = transformData(clean);
+            drawChart(rootData);
+          } catch (err) {
+            console.error("[ERROR] Failed to process data:", err);
             fallbackChart();
-            return;
           }
-
-          const colNames = data.columns.map(c => c.name.toLowerCase());
-          const stateIdx = colNames.indexOf("state");
-          const categoryIdx = colNames.indexOf("category");
-          const quantityIdx = colNames.indexOf("quantity");
-
-          if (stateIdx === -1 || categoryIdx === -1 || quantityIdx === -1) {
-            console.error("[ERROR] Column mapping failed.");
-            fallbackChart();
-            return;
-          }
-
-          const clean = data.resultData.map(row => ({
-            state: row[stateIdx]?.rawValue || "Unknown",
-            category: row[categoryIdx]?.rawValue || "Unknown",
-            quantity: +row[quantityIdx]?.rawValue || 0
-          }));
-
-          const rootData = transformData(clean);
-          drawChart(rootData);
         });
 
         va.messagingUtil.postInitializationMessage();
