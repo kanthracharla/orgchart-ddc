@@ -135,6 +135,7 @@
           console.log("[DATA RECEIVED]", data);
           console.log("[DEBUG] Columns:", data.columns);
           console.log("[DEBUG] Result Data:", data.resultData);
+          console.log("[FULL PAYLOAD]", JSON.stringify(data, null, 2));
 
           try {
             const colNames = data.columns.map(c => c.name.toLowerCase().trim());
